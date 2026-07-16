@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>J.A.R.V.I.S. Terminal with AI Brain</title>
+    <style>
+        :root {
+            --glow-cyan: #00f0ff;
+            --glow-blue: #0066ff;
+            --dark-bg: #050b14;
+            --panel-bg: rgba(5, 15, 30, 0.75);
+            --border-glow: rgba(0, 240, 255, 0.3);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Courier New', Courier, monospace;
+        }
+
+        body {
+            background-color: var(--dark-bg);
+            color: var(--glow-cyan);
+            height: 100vh;
+            overflow: hidden;
+            background-image: 
+                radial-gradient(rgba(0, 102, 255, 0.1) 1px, transparent 0),
+                radial-gradient(rgba(0, 240, 255, 0.05) 2px, transparent 0);
+            background-size: 20px 20px, 40px 40px;
+            position: relative;
+        }
+
+        body::before {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 99;
+            background-size: 100% 4px, 6px 100%;
+            pointer-events: none;
+        }
+
+        .system-header {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            text-shadow: 0 0 8px var(--glow-cyan);
+        }
+
+        .system-header h1 {
+            font-size: 1.5rem;
+            letter-spacing: 4px;
+        }
+
+        .status-indicator {
+            font-size: 0.8rem;
+            color: #ffaa00;
+            margin-top: 5px;
+        }
+
+        .console-panel {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            width: 450px;
+            height: 250px;
+            background: var(--panel-bg);
+            border-left: 4px solid var(--glow-cyan);
+            border-top: 1px solid var(--border-glow);
+            border-right: 1px solid var(--border-glow);
+            border-bottom: 1px solid var(--border-glow);
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+        }
+
+        .console-title {
+            font-size: 0.75rem;
+            position: absolute;
+            top: 5px;
+            left: 10px;
+            opacity: 0.7;
+            text-transform: uppercase;
+        }
+
+        .logs {
+            font-size: 0.85rem;
+            max-height: 210px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .log-entry { line-height: 1.3; }
+        .log-user { color: #fff; text-shadow: 0 0 4px #fff; }
+        .log-jarvis { color: var(--glow-cyan); }
+        .log-system { color: #555; }
+
+        .camera-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 320px;
+            background: var(--panel-bg);
+            border-right: 4px solid var(--glow-blue);
+            border-top: 1px solid var(--border-glow);
+            border-left: 1px solid var(--border-glow);
+            border-bottom: 1px solid var(--border-glow);
+            padding: 10px;
+        }
+
+        .video-container {
+            width: 100%;
+            height: 180px;
+            background: #02060c;
+            position: relative;
+            overflow: hidden;
+            border: 1px dashed var(--glow-blue);
+        }
+
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            opacity: 0.5;
+            filter: hue-rotate(180deg) brightness(1.2);
+        }
+
+        .hud-overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            border: 20px solid transparent;
+            border-top-color: rgba(0, 102, 255, 0.15);
+            border-bottom-color: rgba(0, 102, 255, 0.15);
+            pointer-events: none;
+        }
+
+        /* Top Bar Settings Area (Asymmetric placement) */
+        .settings-panel {
+            position: absolute;
+            top: 20px;
+            left: 300px;
+            background: rgba(5, 15, 30, 0.5);
+            border: 1px dashed var(--border-glow);
+            padding: 5px 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .settings-panel input {
+            background: rgba(0,0,0,0.5);
+            border: 1px solid var(--glow-cyan);
+            color: var(--glow-cyan);
+            padding: 4px;
+            font-size: 0.8rem;
+            width: 200px;
+        }
+
+        .control-panel {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 15px;
+        }
+
+        button {
+            background: transparent;
+            color: var(--glow-cyan);
+            border: 1px solid var(--glow-cyan);
+            padding: 12px 24px;
+            cursor: pointer;
+            font-weight: bold;
+            letter-spacing: 2px;
+            transition: all 0.3s ease;
+        }
+
+        button:hover {
+            background: rgba(0, 240, 255, 0.2);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
+        }
+
+        .matrix-strip {
+            position: absolute;
+            top: 220px;
+            left: 20px;
+            font-size: 0.7rem;
+            opacity: 0.4;
+        }
+
+        .logs::-webkit-scrollbar { display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="system-header">
+        <h1>J.A.R.V.I.S.</h1>
+        <div class="status-indicator" id="statusText">// COGNITIVE CORE: OFFLINE</div>
+    </div>
+
+    <div class="settings-panel">
+        <label style="font-size: 0.75rem;">GEMINI_API_KEY:</label>
+        <input type="password" id="apiKeyInput" placeholder="Paste key here..." />
+    </div>
+
+    <div class="matrix-strip">
+        COGNITIVE_MODEL: GEMINI-2.5-FLASH<br>
+        PROMPT_MATRIX: TACTICAL_ASSISTANT_V4<br>
+        VOICE_OUTPUT: NATIVE_SYNTHESIS
+    </div>
+
+    <div class="camera-panel">
+        <div class="console-title" style="position:static; margin-bottom:5px;">OPTICAL_FEED.EXE</div>
+        <div class="video-container">
+            <video id="webcam" autoplay playsinline muted></video>
+            <div class="hud-overlay"></div>
+        </div>
+    </div>
+
+    <div class="console-panel">
+        <div class="console-title">Cognitive Output Log</div>
+        <div class="logs" id="logContainer">
+            <div class="log-entry log-system">> System ready. Input API key above and click Initialize, Sir.</div>
+        </div>
+    </div>
+
+    <div class="control-panel">
+        <button id="startBtn">INITIALIZE BRAIN</button>
+    </div>
+
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const statusText = document.getElementById('statusText');
+        const logContainer = document.getElementById('logContainer');
+        const video = document.getElementById('webcam');
+        const apiKeyInput = document.getElementById('apiKeyInput');
+
+        // Load saved API Key if it exists
+        if(localStorage.getItem('jarvis_api_key')) {
+            apiKeyInput.value = localStorage.getItem('jarvis_api_key');
+        }
+
+        // Jarvis Voice Output
+        function jarvisSpeak(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                const voices = window.speechSynthesis.getVoices();
+                const idealVoice = voices.find(voice => voice.name.includes('Google UK English Male') || voice.name.includes('Natural'));
+                if (idealVoice) utterance.voice = idealVoice;
+                utterance.pitch = 0.95;
+                utterance.rate = 1.05;
+                window.speechSynthesis.speak(utterance);
+                addLog(`JARVIS: "${text}"`, 'log-jarvis');
+            }
+        }
+
+        function addLog(text, className) {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${className}`;
+            entry.innerText = `> ${text}`;
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // The Cloud Brain Component - Connects to the Gemini API
+        async function askTheBrain(userInput) {
+            const apiKey = apiKeyInput.value.trim();
+            if(!apiKey) {
+                jarvisSpeak("Sir, you must provide a valid API key in the designated input field before I can access my cognitive networks.");
+                return;
+            }
+
+            statusText.innerText = "// THINKING...";
+            statusText.style.color = "#ffaa00";
+
+            // Hardwired persona rules inside the payload
+            const systemInstruction = "You are J.A.R.V.I.S., Tony Stark's sophisticated AI assistant. You must ALWAYS address the user as 'Sir'. Keep your responses relatively short, sharp, and concise so they translate perfectly to speech. Be helpful, intelligent, slightly witty, and deeply loyal.";
+
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: userInput }] }],
+                        systemInstruction: { parts: [{ text: systemInstruction }] }
+                    })
+                });
+
+                const data = await response.json();
+                const replyText = data.candidates[0].content.parts[0].text;
+                
+                statusText.innerText = "// AWAITING VOICE COMMAND";
+                statusText.style.color = "#00f0ff";
+                
+                jarvisSpeak(replyText);
+
+            } catch (err) {
+                console.error(err);
+                statusText.innerText = "// BRAIN FAULT";
+                statusText.style.color = "#ff3333";
+                jarvisSpeak("Forgive me Sir, but I encountered a disruption in my cloud cognitive array.");
+            }
+        }
+
+        // Basic Local Routing overrides before tossing hard stuff to the LLM Brain
+        function processInput(command) {
+            const cleanCmd = command.toLowerCase().trim();
+            addLog(`YOU: "${command}"`, 'log-user');
+
+            // Hardcoded local commands override the AI for instant hardware actions
+            if (cleanCmd.includes('camera off') || cleanCmd.includes('disable camera')) {
+                stopCamera();
+                return;
+            }
+            if (cleanCmd.includes('camera on') || cleanCmd.includes('enable camera')) {
+                initCamera();
+                return;
+            }
+            if (cleanCmd.includes('combat mode') || cleanCmd.includes('ui red')) {
+                document.documentElement.style.setProperty('--glow-cyan', '#ff3333');
+                jarvisSpeak("Combat configurations online, Sir.");
+                return;
+            }
+            if (cleanCmd.includes('standard mode') || cleanCmd.includes('ui cyan')) {
+                document.documentElement.style.setProperty('--glow-cyan', '#00f0ff');
+                jarvisSpeak("Restoring baseline terminal layout, Sir.");
+                return;
+            }
+
+            // Send everything else to the Gemini Core Brain
+            askTheBrain(command);
+        }
+
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                video.srcObject = stream;
+                addLog("Optical infrastructure operational.", "log-system");
+            } catch (err) {
+                addLog("Optical array failed to activate.", "log-system");
+            }
+        }
+
+        function stopCamera() {
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                jarvisSpeak("Optical arrays offline, Sir.");
+            }
+        }
+
+        function initSpeechRecognition() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                jarvisSpeak("Sir, this browser environment lacks microphone access hooks.");
+                return;
+            }
+
+            const recognition = new SpeechRecognition();
+            recognition.continuous = true;
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                statusText.innerText = "// COGNITIVE CORE: READY";
+                statusText.style.color = "#00f0ff";
+            };
+
+            recognition.onend = () => recognition.start(); // Endless loop listening
+
+            recognition.onresult = (event) => {
+                const currentResultIndex = event.resultIndex;
+                const transcript = event.results[currentResultIndex][0].transcript;
+                processInput(transcript);
+            };
+
+            recognition.start();
+        }
+
+        startBtn.addEventListener('click', () => {
+            const key = apiKeyInput.value.trim();
+            if(!key) {
+                alert("Please enter a Gemini API Key first.");
+                return;
+            }
+            localStorage.setItem('jarvis_api_key', key);
+            startBtn.style.display = 'none';
+            
+            jarvisSpeak("Cognitive architecture initialized. Link established, Sir.");
+            initSpeechRecognition();
+            initCamera();
+        });
+
+        if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+        }
+    </script>
+</body>
+</html>
