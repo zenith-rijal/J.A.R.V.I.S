@@ -3,14 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>J.A.R.V.I.S. Terminal with AI Brain</title>
+    <title>JARVIS // Advanced Tactical HUD</title>
+    <!-- Import WebLLM for the local browser fallback model -->
+    <script type="module">
+        import * as webllm from "https://esm.run/@webllm/javascript-component";
+        window.webllm = webllm;
+    </script>
     <style>
         :root {
-            --glow-cyan: #00f0ff;
-            --glow-blue: #0066ff;
-            --dark-bg: #050b14;
-            --panel-bg: rgba(5, 15, 30, 0.75);
-            --border-glow: rgba(0, 240, 255, 0.3);
+            --bg-color: #050b14;
+            --grid-color: rgba(0, 162, 255, 0.05);
+            --accent-glow: #00e5ff;
+            --accent-dim: #005f73;
+            --text-main: #d0f4de;
+            --panel-bg: rgba(10, 25, 47, 0.7);
+            --panel-border: rgba(0, 229, 255, 0.2);
+            --alert-color: #ff3366;
         }
 
         * {
@@ -21,386 +29,738 @@
         }
 
         body {
-            background-color: var(--dark-bg);
-            color: var(--glow-cyan);
-            height: 100vh;
-            overflow: hidden;
+            background-color: var(--bg-color);
             background-image: 
-                radial-gradient(rgba(0, 102, 255, 0.1) 1px, transparent 0),
-                radial-gradient(rgba(0, 240, 255, 0.05) 2px, transparent 0);
-            background-size: 20px 20px, 40px 40px;
-            position: relative;
+                linear-gradient(var(--grid-color) 1px, transparent 1px),
+                linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+            background-size: 20px 20px;
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            padding: 20px;
         }
 
-        body::before {
-            content: " ";
-            display: block;
-            position: absolute;
-            top: 0; left: 0; bottom: 0; right: 0;
-            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-            z-index: 99;
-            background-size: 100% 4px, 6px 100%;
-            pointer-events: none;
+        /* Asymmetric HUD Layout */
+        .hud-container {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            grid-template-rows: auto 1fr;
+            gap: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
         }
 
-        .system-header {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            text-shadow: 0 0 8px var(--glow-cyan);
+        header {
+            grid-column: 1 / -1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--accent-dim);
+            padding-bottom: 10px;
         }
 
-        .system-header h1 {
-            font-size: 1.5rem;
+        .hud-title h1 {
+            font-size: 1.8rem;
             letter-spacing: 4px;
+            color: #fff;
+            text-shadow: 0 0 10px var(--accent-glow);
         }
 
-        .status-indicator {
-            font-size: 0.8rem;
-            color: #ffaa00;
-            margin-top: 5px;
-        }
-
-        .console-panel {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            width: 450px;
-            height: 250px;
-            background: var(--panel-bg);
-            border-left: 4px solid var(--glow-cyan);
-            border-top: 1px solid var(--border-glow);
-            border-right: 1px solid var(--border-glow);
-            border-bottom: 1px solid var(--border-glow);
-            padding: 15px;
+        .system-status {
             display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-        }
-
-        .console-title {
-            font-size: 0.75rem;
-            position: absolute;
-            top: 5px;
-            left: 10px;
-            opacity: 0.7;
-            text-transform: uppercase;
-        }
-
-        .logs {
+            gap: 15px;
             font-size: 0.85rem;
-            max-height: 210px;
-            overflow-y: auto;
+        }
+
+        .status-node {
+            padding: 4px 8px;
+            border: 1px solid var(--panel-border);
+            background: rgba(0,0,0,0.4);
+        }
+
+        .status-node.active {
+            color: var(--accent-glow);
+            border-color: var(--accent-glow);
+            box-shadow: inset 0 0 5px rgba(0, 229, 255, 0.3);
+        }
+
+        .status-node.alert {
+            color: var(--alert-color);
+            border-color: var(--alert-color);
+        }
+
+        /* Left Column: Core Interactions */
+        .main-panel {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 20px;
         }
 
-        .log-entry { line-height: 1.3; }
-        .log-user { color: #fff; text-shadow: 0 0 4px #fff; }
-        .log-jarvis { color: var(--glow-cyan); }
-        .log-system { color: #555; }
-
-        .camera-panel {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 320px;
+        .panel {
             background: var(--panel-bg);
-            border-right: 4px solid var(--glow-blue);
-            border-top: 1px solid var(--border-glow);
-            border-left: 1px solid var(--border-glow);
-            border-bottom: 1px solid var(--border-glow);
-            padding: 10px;
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            padding: 15px;
+            position: relative;
+            backdrop-filter: blur(4px);
         }
 
-        .video-container {
+        .panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 10px; height: 10px;
+            border-top: 2px solid var(--accent-glow);
+            border-left: 2px solid var(--accent-glow);
+        }
+
+        .panel-header {
+            font-size: 0.9rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+            color: var(--accent-glow);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* AI Interactive Terminal */
+        .terminal-log {
+            height: 250px;
+            overflow-y: auto;
+            border: 1px solid rgba(0, 229, 255, 0.1);
+            background: rgba(0, 5, 15, 0.6);
+            padding: 10px;
+            font-size: 0.9rem;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .msg { margin-bottom: 4px; }
+        .msg.user { color: #80ffdb; }
+        .msg.jarvis { color: var(--accent-glow); }
+        .msg.sys { color: #aaa; font-style: italic; }
+
+        .controls-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        button, select, input {
+            background: rgba(0, 40, 80, 0.5);
+            border: 1px solid var(--accent-dim);
+            color: var(--text-main);
+            padding: 8px 12px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+
+        button:hover {
+            background: var(--accent-dim);
+            color: #fff;
+            box-shadow: 0 0 8px var(--accent-glow);
+        }
+
+        button.active {
+            background: #00e5ff;
+            color: #000;
+            font-weight: bold;
+        }
+
+        input[type="text"], select {
+            flex-grow: 1;
+            background: rgba(0,0,0,0.5);
+        }
+
+        /* Sketchpad Canvas Matrix */
+        .canvas-container {
+            position: relative;
             width: 100%;
-            height: 180px;
-            background: #02060c;
+            height: 300px;
+            background-color: #02060c;
+            background-image: 
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 10px 10px;
+            border: 1px solid rgba(0, 229, 255, 0.1);
+        }
+
+        canvas {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            cursor: crosshair;
+        }
+
+        /* Right Column: Feeds & Memory Profile */
+        .side-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .video-feed-wrapper {
+            width: 100%;
+            height: 200px;
+            background: #000;
+            border: 1px solid rgba(0, 229, 255, 0.1);
             position: relative;
             overflow: hidden;
-            border: 1px dashed var(--glow-blue);
         }
 
         video {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            opacity: 0.5;
-            filter: hue-rotate(180deg) brightness(1.2);
+            transform: scaleX(-1); /* Mirror view */
+            opacity: 0.7;
         }
 
-        .hud-overlay {
+        .video-overlay {
             position: absolute;
             top: 0; left: 0; width: 100%; height: 100%;
-            border: 20px solid transparent;
-            border-top-color: rgba(0, 102, 255, 0.15);
-            border-bottom-color: rgba(0, 102, 255, 0.15);
+            border: 1px solid rgba(255,0,0,0.2);
             pointer-events: none;
+            box-shadow: inset 0 0 20px rgba(0, 229, 255, 0.15);
         }
 
-        /* Top Bar Settings Area (Asymmetric placement) */
-        .settings-panel {
-            position: absolute;
-            top: 20px;
-            left: 300px;
-            background: rgba(5, 15, 30, 0.5);
-            border: 1px dashed var(--border-glow);
-            padding: 5px 10px;
+        .profile-form {
             display: flex;
-            gap: 10px;
-            align-items: center;
+            flex-direction: column;
+            gap: 8px;
         }
 
-        .settings-panel input {
-            background: rgba(0,0,0,0.5);
-            border: 1px solid var(--glow-cyan);
-            color: var(--glow-cyan);
-            padding: 4px;
-            font-size: 0.8rem;
-            width: 200px;
+        .profile-form label {
+            font-size: 0.75rem;
+            color: var(--accent-glow);
+            text-transform: uppercase;
         }
-
-        .control-panel {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            display: flex;
-            gap: 15px;
-        }
-
-        button {
-            background: transparent;
-            color: var(--glow-cyan);
-            border: 1px solid var(--glow-cyan);
-            padding: 12px 24px;
-            cursor: pointer;
-            font-weight: bold;
-            letter-spacing: 2px;
-            transition: all 0.3s ease;
-        }
-
-        button:hover {
-            background: rgba(0, 240, 255, 0.2);
-            box-shadow: 0 0 15px rgba(0, 240, 255, 0.3);
-        }
-
-        .matrix-strip {
-            position: absolute;
-            top: 220px;
-            left: 20px;
-            font-size: 0.7rem;
-            opacity: 0.4;
-        }
-
-        .logs::-webkit-scrollbar { display: none; }
     </style>
 </head>
 <body>
 
-    <div class="system-header">
-        <h1>J.A.R.V.I.S.</h1>
-        <div class="status-indicator" id="statusText">// COGNITIVE CORE: OFFLINE</div>
-    </div>
-
-    <div class="settings-panel">
-        <label style="font-size: 0.75rem;">GEMINI_API_KEY:</label>
-        <input type="password" id="apiKeyInput" placeholder="Paste key here..." />
-    </div>
-
-    <div class="matrix-strip">
-        COGNITIVE_MODEL: GEMINI-2.5-FLASH<br>
-        PROMPT_MATRIX: TACTICAL_ASSISTANT_V4<br>
-        VOICE_OUTPUT: NATIVE_SYNTHESIS
-    </div>
-
-    <div class="camera-panel">
-        <div class="console-title" style="position:static; margin-bottom:5px;">OPTICAL_FEED.EXE</div>
-        <div class="video-container">
-            <video id="webcam" autoplay playsinline muted></video>
-            <div class="hud-overlay"></div>
+<div class="hud-container">
+    <header>
+        <div class="hud-title">
+            <h1>J.A.R.V.I.S.</h1>
         </div>
-    </div>
-
-    <div class="console-panel">
-        <div class="console-title">Cognitive Output Log</div>
-        <div class="logs" id="logContainer">
-            <div class="log-entry log-system">> System ready. Input API key above and click Initialize, Sir.</div>
+        <div class="system-status">
+            <div id="status-ext" class="status-node">EXT: DISCONNECTED</div>
+            <div id="status-mic" class="status-node">MIC: OFF</div>
+            <div id="status-cam" class="status-node">CAM: OFF</div>
+            <div id="status-brain" class="status-node">BRAIN: READY</div>
         </div>
-    </div>
+    </header>
 
-    <div class="control-panel">
-        <button id="startBtn">INITIALIZE BRAIN</button>
-    </div>
+    <!-- Main Workspace (Left) -->
+    <main class="main-panel">
+        <!-- Terminal AI Deck -->
+        <div class="panel">
+            <div class="panel-header">
+                <span>Core Interface Matrix</span>
+                <span id="thinking-indicator" style="color: var(--accent-glow); display:none;">LOGIC ROUTING...</span>
+            </div>
+            <div class="terminal-log" id="terminalLog">
+                <div class="msg sys">System initialized. Awaiting orders, sir.</div>
+            </div>
+            <div class="controls-row">
+                <button id="btnToggleMic">PUSH TO TALK</button>
+                <button id="btnContinuousMic">CONTS LISTENING: OFF</button>
+                <input type="text" id="txtInput" placeholder="Enter manual command sequence...">
+                <button id="btnSend">EXECUTE</button>
+            </div>
+        </div>
 
-    <script>
-        const startBtn = document.getElementById('startBtn');
-        const statusText = document.getElementById('statusText');
-        const logContainer = document.getElementById('logContainer');
-        const video = document.getElementById('webcam');
-        const apiKeyInput = document.getElementById('apiKeyInput');
+        <!-- Cutting Mat Workspace / Sketchpad -->
+        <div class="panel">
+            <div class="panel-header">Tactical Grid Overlay (Sketchpad)</div>
+            <div class="canvas-container">
+                <canvas id="sketchpad"></canvas>
+            </div>
+            <div class="controls-row" style="margin-top:10px;">
+                <button id="btnPenMode" class="active">PEN</button>
+                <button id="btnEraserMode">ERASER</button>
+                <button id="btnClearCanvas">PURGE GRID</button>
+            </div>
+        </div>
+    </main>
 
-        // Load saved API Key if it exists
-        if(localStorage.getItem('jarvis_api_key')) {
-            apiKeyInput.value = localStorage.getItem('jarvis_api_key');
+    <!-- Contextual Datadecks (Right) -->
+    <aside class="side-panel">
+        <!-- Camera Subsystem -->
+        <div class="panel">
+            <div class="panel-header">
+                <span>Visual Matrix Feed</span>
+                <button id="btnToggleCam" style="padding: 2px 6px; font-size: 0.7rem;">TOGGLE</button>
+            </div>
+            <div class="video-feed-wrapper">
+                <video id="videoFeed" autoplay playsinline></video>
+                <div class="video-overlay"></div>
+            </div>
+        </div>
+
+        <!-- System Configuration & Identity Registry -->
+        <div class="panel">
+            <div class="panel-header">Identity Matrix (Local Memory)</div>
+            <div class="profile-form">
+                <label>User Variant Name</label>
+                <input type="text" id="profName" value="Sir">
+                
+                <label>Operational Preferences</label>
+                <input type="text" id="profPrefs" placeholder="e.g. Focus on cybersecurity code execution">
+                
+                <label>Cognitive Node (LLM Engine)</label>
+                <select id="engineSelect">
+                    <option value="groq">Groq Cloud Engine (Cloud SaaS)</option>
+                    <option value="gemini">Gemini Core (Cloud SaaS)</option>
+                    <option value="webllm">WebLLM Matrix (100% Local Browser Engine)</option>
+                </select>
+
+                <label>Secure API Access Key</label>
+                <input type="password" id="apiKeyInput" placeholder="Paste access credentials here...">
+                
+                <button id="btnSaveProfile" style="margin-top:5px; width:100%;">COMMIT CHANGES</button>
+            </div>
+        </div>
+    </aside>
+</div>
+
+<script>
+    // Global App Configuration & State Machine
+    const state = {
+        isListening: false,
+        isContinuous: false,
+        isCameraOn: false,
+        isDrawing: false,
+        drawMode: 'draw', // 'draw' or 'erase'
+        recognition: null,
+        localModelEngine: null,
+        extensionId: "gkkjbhgffbofpajlbcmfomkclnkcongg", // Set matching your manifest
+        profile: {
+            name: "Sir",
+            preferences: "",
+            engine: "groq",
+            apiKey: ""
         }
+    };
 
-        // Jarvis Voice Output
-        function jarvisSpeak(text) {
-            if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel();
-                const utterance = new SpeechSynthesisUtterance(text);
-                const voices = window.speechSynthesis.getVoices();
-                const idealVoice = voices.find(voice => voice.name.includes('Google UK English Male') || voice.name.includes('Natural'));
-                if (idealVoice) utterance.voice = idealVoice;
-                utterance.pitch = 0.95;
-                utterance.rate = 1.05;
-                window.speechSynthesis.speak(utterance);
-                addLog(`JARVIS: "${text}"`, 'log-jarvis');
-            }
-        }
+    // --- DOM Elements ---
+    const terminalLog = document.getElementById('terminalLog');
+    const txtInput = document.getElementById('txtInput');
+    const btnSend = document.getElementById('btnSend');
+    const btnToggleMic = document.getElementById('btnToggleMic');
+    const btnContinuousMic = document.getElementById('btnContinuousMic');
+    const btnToggleCam = document.getElementById('btnToggleCam');
+    const videoFeed = document.getElementById('videoFeed');
+    const sketchpad = document.getElementById('sketchpad');
+    const ctx = sketchpad.getContext('2d');
+    
+    // Status Elements
+    const statusExt = document.getElementById('status-ext');
+    const statusMic = document.getElementById('status-mic');
+    const statusCam = document.getElementById('status-cam');
+    const statusBrain = document.getElementById('status-brain');
+    const thinkingIndicator = document.getElementById('thinking-indicator');
 
-        function addLog(text, className) {
-            const entry = document.createElement('div');
-            entry.className = `log-entry ${className}`;
-            entry.innerText = `> ${text}`;
-            logContainer.appendChild(entry);
-            logContainer.scrollTop = logContainer.scrollHeight;
-        }
+    // --- Core Lifecycle Logic ---
+    window.addEventListener('DOMContentLoaded', () => {
+        loadProfile();
+        initSpeechRecognition();
+        initSketchpad();
+        checkChromeExtension();
+        
+        // Setup UI Event binding
+        btnSend.addEventListener('click', handleManualInput);
+        txtInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') handleManualInput(); });
+        btnToggleMic.addEventListener('mousedown', startVoiceCapture);
+        btnToggleMic.addEventListener('mouseup', stopVoiceCapture);
+        btnContinuousMic.addEventListener('click', toggleContinuousListening);
+        btnToggleCam.addEventListener('click', toggleCameraMatrix);
+        document.getElementById('btnSaveProfile').addEventListener('click', saveProfile);
+        
+        document.getElementById('btnPenMode').addEventListener('click', () => setDrawMode('draw'));
+        document.getElementById('btnEraserMode').addEventListener('click', () => setDrawMode('erase'));
+        document.getElementById('btnClearCanvas').addEventListener('click', clearCanvasGrid);
+    });
 
-        // The Cloud Brain Component - Connects to the Gemini API
-        async function askTheBrain(userInput) {
-            const apiKey = apiKeyInput.value.trim();
-            if(!apiKey) {
-                jarvisSpeak("Sir, you must provide a valid API key in the designated input field before I can access my cognitive networks.");
-                return;
-            }
-
-            statusText.innerText = "// THINKING...";
-            statusText.style.color = "#ffaa00";
-
-            // Hardwired persona rules inside the payload
-            const systemInstruction = "You are J.A.R.V.I.S., Tony Stark's sophisticated AI assistant. You must ALWAYS address the user as 'Sir'. Keep your responses relatively short, sharp, and concise so they translate perfectly to speech. Be helpful, intelligent, slightly witty, and deeply loyal.";
-
+    // --- Local Profile Storage Systems ---
+    function loadProfile() {
+        const saved = localStorage.getItem('jarvis_profile');
+        if (saved) {
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: userInput }] }],
-                        systemInstruction: { parts: [{ text: systemInstruction }] }
-                    })
-                });
+                state.profile = JSON.parse(saved);
+                document.getElementById('profName').value = state.profile.name || "Sir";
+                document.getElementById('profPrefs').value = state.profile.preferences || "";
+                document.getElementById('engineSelect').value = state.profile.engine || "groq";
+                document.getElementById('apiKeyInput').value = state.profile.apiKey || "";
+            } catch(e) { logTerminal("sys", "Failed loading directory structure profiles."); }
+        }
+    }
 
-                const data = await response.json();
-                const replyText = data.candidates[0].content.parts[0].text;
-                
-                statusText.innerText = "// AWAITING VOICE COMMAND";
-                statusText.style.color = "#00f0ff";
-                
-                jarvisSpeak(replyText);
+    function saveProfile() {
+        state.profile.name = document.getElementById('profName').value;
+        state.profile.preferences = document.getElementById('profPrefs').value;
+        state.profile.engine = document.getElementById('engineSelect').value;
+        state.profile.apiKey = document.getElementById('apiKeyInput').value;
+        
+        localStorage.setItem('jarvis_profile', JSON.stringify(state.profile));
+        logTerminal("sys", "Identity metrics profile updated successfully.");
+        
+        if (state.profile.engine === 'webllm') {
+            initWebLLM();
+        }
+    }
 
-            } catch (err) {
-                console.error(err);
-                statusText.innerText = "// BRAIN FAULT";
-                statusText.style.color = "#ff3333";
-                jarvisSpeak("Forgive me Sir, but I encountered a disruption in my cloud cognitive array.");
+    function logTerminal(sender, text) {
+        const line = document.createElement('div');
+        line.className = `msg ${sender}`;
+        line.innerText = `${sender.toUpperCase()}: ${text}`;
+        terminalLog.appendChild(line);
+        terminalLog.scrollTop = terminalLog.scrollHeight;
+    }
+
+    // --- Web Speech API Engines ---
+    function initSpeechRecognition() {
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!SpeechRecognition) {
+            logTerminal("sys", "Web Speech Subsystem missing natively in this browser shell.");
+            return;
+        }
+        state.recognition = new SpeechRecognition();
+        state.recognition.continuous = false;
+        state.recognition.interimResults = false;
+        state.recognition.lang = 'en-US';
+
+        state.recognition.onstart = () => {
+            statusMic.innerText = "MIC: LISTENING";
+            statusMic.classList.add('active');
+        };
+
+        state.recognition.onend = () => {
+            if (!state.isContinuous) {
+                statusMic.innerText = "MIC: OFF";
+                statusMic.classList.remove('active');
+            } else if (state.isListening) {
+                state.recognition.start(); // Keep continuous live
             }
+        };
+
+        state.recognition.onresult = (event) => {
+            const resultText = event.results[0][0].transcript;
+            logTerminal("user", resultText);
+            processQuery(resultText);
+        };
+
+        state.recognition.onerror = (err) => {
+            if (err.error !== 'no-speech') {
+                logTerminal("sys", `Audio capture warning: ${err.error}`);
+            }
+        };
+    }
+
+    function startVoiceCapture() {
+        if (!state.recognition || state.isContinuous) return;
+        state.isListening = true;
+        try { state.recognition.start(); } catch(e){}
+    }
+
+    function stopVoiceCapture() {
+        if (!state.recognition || state.isContinuous) return;
+        state.isListening = false;
+        setTimeout(() => { try { state.recognition.stop(); } catch(e){} }, 400);
+    }
+
+    function toggleContinuousListening() {
+        if (!state.recognition) return;
+        state.isContinuous = !state.isContinuous;
+        if (state.isContinuous) {
+            state.isListening = true;
+            btnContinuousMic.classList.add('active');
+            btnContinuousMic.innerText = "CONTS LISTENING: ON";
+            try { state.recognition.start(); } catch(e){}
+        } else {
+            state.isListening = false;
+            btnContinuousMic.classList.remove('active');
+            btnContinuousMic.innerText = "CONTS LISTENING: OFF";
+            try { state.recognition.stop(); } catch(e){}
+            statusMic.innerText = "MIC: OFF";
+            statusMic.classList.remove('active');
+        }
+    }
+
+    function speakOutboundText(text) {
+        if (!window.speechSynthesis) return;
+        window.speechSynthesis.cancel(); // Terminate cascading speech lines
+        const utterance = new window.SpeechSynthesisUtterance(text);
+        
+        // Seek typical natural vocal variants if loaded in host OS
+        const voices = window.speechSynthesis.getVoices();
+        const preferredVoice = voices.find(v => v.name.includes('Google US English') || v.name.includes('Natural'));
+        if(preferredVoice) utterance.voice = preferredVoice;
+        
+        utterance.rate = 1.05;
+        utterance.pitch = 0.95;
+        window.speechSynthesis.speak(utterance);
+    }
+
+    // --- Processing Pipeline / Core AI Interface Rules ---
+    function handleManualInput() {
+        const val = txtInput.value.trim();
+        if(!val) return;
+        logTerminal("user", val);
+        txtInput.value = "";
+        processQuery(val);
+    }
+
+    async function processQuery(query) {
+        thinkingIndicator.style.display = "inline";
+        statusBrain.innerText = "BRAIN: PROCESSING";
+        statusBrain.classList.add('active');
+
+        // Check if query targets local automation routing via Extension
+        if (interceptAutomationIntent(query)) {
+            thinkingIndicator.style.display = "none";
+            statusBrain.innerText = "BRAIN: READY";
+            statusBrain.classList.remove('active');
+            return;
         }
 
-        // Basic Local Routing overrides before tossing hard stuff to the LLM Brain
-        function processInput(command) {
-            const cleanCmd = command.toLowerCase().trim();
-            addLog(`YOU: "${command}"`, 'log-user');
+        // Base structural system contextual prompt
+        const systemPrompt = `You are JARVIS, an advanced, ultra-intelligent, and deeply loyal AI assistant. 
+Always address the user as "sir". Keep responses direct, helpful, technically precise, and highly concise. 
+User Context Profiles: Name=${state.profile.name}. Preferences=${state.profile.preferences}.`;
 
-            // Hardcoded local commands override the AI for instant hardware actions
-            if (cleanCmd.includes('camera off') || cleanCmd.includes('disable camera')) {
-                stopCamera();
-                return;
+        let reply = "";
+        try {
+            if (state.profile.engine === 'groq') {
+                reply = await callGroqAPI(systemPrompt, query);
+            } else if (state.profile.engine === 'gemini') {
+                reply = await callGeminiAPI(systemPrompt, query);
+            } else if (state.profile.engine === 'webllm') {
+                reply = await callWebLLMMatrix(systemPrompt, query);
             }
-            if (cleanCmd.includes('camera on') || cleanCmd.includes('enable camera')) {
-                initCamera();
-                return;
-            }
-            if (cleanCmd.includes('combat mode') || cleanCmd.includes('ui red')) {
-                document.documentElement.style.setProperty('--glow-cyan', '#ff3333');
-                jarvisSpeak("Combat configurations online, Sir.");
-                return;
-            }
-            if (cleanCmd.includes('standard mode') || cleanCmd.includes('ui cyan')) {
-                document.documentElement.style.setProperty('--glow-cyan', '#00f0ff');
-                jarvisSpeak("Restoring baseline terminal layout, Sir.");
-                return;
-            }
-
-            // Send everything else to the Gemini Core Brain
-            askTheBrain(command);
+        } catch (err) {
+            reply = "Apologies, sir. I encountered a breakdown in my API communications matrix.";
+            console.error(err);
         }
 
-        async function initCamera() {
+        logTerminal("jarvis", reply);
+        speakOutboundText(reply);
+        
+        thinkingIndicator.style.display = "none";
+        statusBrain.innerText = "BRAIN: READY";
+        statusBrain.classList.remove('active');
+    }
+
+    // --- API Integrations ---
+    async function callGroqAPI(system, user) {
+        if (!state.profile.apiKey) return "API Credentials missing, sir. Please supply access parameters.";
+        const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${state.profile.apiKey}`
+            },
+            body: JSON.stringify({
+                model: "llama-3.3-70b-versatile",
+                messages: [
+                    { role: "system", content: system },
+                    { role: "user", content: user }
+                ],
+                max_tokens: 150
+            })
+        });
+        const data = await response.json();
+        return data.choices[0].message.content.trim();
+    }
+
+    async function callGeminiAPI(system, user) {
+        if (!state.profile.apiKey) return "API Credentials missing, sir. Please supply access parameters.";
+        const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${state.profile.apiKey}`;
+        const response = await fetch(endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                contents: [{ parts: [{ text: `${system}\n\nUser Request: ${user}` }] }],
+                generationConfig: { maxOutputTokens: 150 }
+            })
+        });
+        const data = await response.json();
+        return data.candidates[0].content.parts[0].text.trim();
+    }
+
+    // --- Local WebLLM Engine Fallback ---
+    async function initWebLLM() {
+        if (!window.webllm) return;
+        if (state.localModelEngine) return; // Loaded already
+        
+        logTerminal("sys", "Downloading browser native AI weights (this may require some time)...");
+        try {
+            state.localModelEngine = new window.webllm.CreateEngine();
+            // Using compact model for rapid processing speeds directly inside client hardware VRAM/RAM
+            await state.localModelEngine.reload("Llama-3-8B-Instruct-q4f32_1-1k");
+            logTerminal("sys", "In-memory architecture weights allocated successfully. Local engine online.");
+        } catch(e) {
+            logTerminal("sys", "Error pulling web assembly compiler runtimes.");
+            state.localModelEngine = null;
+        }
+    }
+
+    async function callWebLLMMatrix(system, user) {
+        if (!state.localModelEngine) {
+            await initWebLLM();
+            if (!state.localModelEngine) return "Local hardware model generation stack failed initializing, sir.";
+        }
+        const inputMessages = [
+            { role: "system", content: system },
+            { role: "user", content: user }
+        ];
+        const reply = await state.localModelEngine.chat.completions.create({
+            messages: inputMessages,
+            max_tokens: 100
+        });
+        return reply.choices[0].message.content;
+    }
+
+    // --- Browser Control Extension Router Integration ---
+    function checkChromeExtension() {
+        if (!window.chrome || !chrome.runtime) return;
+        // Broadcast test handshake packet to background systems
+        chrome.runtime.sendMessage(state.extensionId, { action: "PING" }, response => {
+            if (chrome.runtime.lastError || !response) {
+                statusExt.innerText = "EXT: DISCONNECTED";
+                statusExt.classList.remove('active');
+            } else if (response.status === "PONG") {
+                statusExt.innerText = "EXT: ONLINE";
+                statusExt.classList.add('active');
+            }
+        });
+    }
+
+    function interceptAutomationIntent(query) {
+        const text = query.toLowerCase();
+        let targetAction = null;
+        let payload = {};
+
+        if (text.includes("open tab") || text.includes("browse to")) {
+            targetAction = "OPEN_TAB";
+            const matches = text.match(/to\s+(https?:\/\/[^\s]+|[a-z0-9.-]+\.[a-z]{2,})/i);
+            let url = matches ? matches[1] : "https://google.com";
+            if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+            payload.url = url;
+        } else if (text.includes("close tab") || text.includes("terminate window")) {
+            targetAction = "CLOSE_TAB";
+        } else if (text.includes("get tab details") || text.includes("read tab")) {
+            targetAction = "GET_TAB_INFO";
+        }
+
+        if (targetAction && window.chrome && chrome.runtime) {
+            chrome.runtime.sendMessage(state.extensionId, { action: targetAction, ...payload }, (res) => {
+                if (chrome.runtime.lastError) {
+                    logTerminal("jarvis", "Automation relays unreachable, sir. Ensure extension verification completes.");
+                    speakOutboundText("Automation relays unreachable, sir.");
+                } else if (res && res.success) {
+                    let logMsg = res.message || "Sequence executed cleanly.";
+                    if (targetAction === "GET_TAB_INFO") {
+                        logMsg = `Target active trace is titled: "${res.title}" at routing location: ${res.url}`;
+                    }
+                    logTerminal("jarvis", logMsg);
+                    speakOutboundText(logMsg);
+                }
+            });
+            return true;
+        }
+        return false;
+    }
+
+    // --- Hardware Subsystems Layer (Camera) ---
+    async function toggleCameraMatrix() {
+        if (state.isCameraOn) {
+            const tracks = videoFeed.srcObject ? videoFeed.srcObject.getTracks() : [];
+            tracks.forEach(track => track.stop());
+            videoFeed.srcObject = null;
+            state.isCameraOn = false;
+            statusCam.innerText = "CAM: OFF";
+            statusCam.classList.remove('active');
+            logTerminal("sys", "Optics matrix disabled.");
+        } else {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-                video.srcObject = stream;
-                addLog("Optical infrastructure operational.", "log-system");
-            } catch (err) {
-                addLog("Optical array failed to activate.", "log-system");
+                videoFeed.srcObject = stream;
+                state.isCameraOn = true;
+                statusCam.innerText = "CAM: FEED_LIVE";
+                statusCam.classList.add('active');
+                logTerminal("sys", "Optics feed active, security perimeter scanned.");
+            } catch(e) {
+                logTerminal("sys", "Hardware permissions refused for optical systems.");
             }
         }
+    }
 
-        function stopCamera() {
-            if (video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
-                video.srcObject = null;
-                jarvisSpeak("Optical arrays offline, Sir.");
-            }
-        }
+    // --- Canvas Matrix Layer (Tactical Sketchpad) ---
+    function initSketchpad() {
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
 
-        function initSpeechRecognition() {
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                jarvisSpeak("Sir, this browser environment lacks microphone access hooks.");
-                return;
-            }
+        // Drawing Event Hooks
+        sketchpad.addEventListener('mousedown', startDrawing);
+        sketchpad.addEventListener('mousemove', drawStroke);
+        sketchpad.addEventListener('mouseup', stopDrawing);
+        sketchpad.addEventListener('mouseout', stopDrawing);
 
-            const recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = false;
-            recognition.lang = 'en-US';
+        // Touch Devices Setup
+        sketchpad.addEventListener('touchstart', (e) => { e.preventDefault(); startDrawing(e.touches[0]); });
+        sketchpad.addEventListener('touchmove', (e) => { e.preventDefault(); drawStroke(e.touches[0]); });
+        sketchpad.addEventListener('touchend', stopDrawing);
+    }
 
-            recognition.onstart = () => {
-                statusText.innerText = "// COGNITIVE CORE: READY";
-                statusText.style.color = "#00f0ff";
-            };
+    function resizeCanvas() {
+        const rect = sketchpad.parentElement.getBoundingClientRect();
+        sketchpad.width = rect.width;
+        sketchpad.height = 300;
+        clearCanvasGrid();
+    }
 
-            recognition.onend = () => recognition.start(); // Endless loop listening
+    function clearCanvasGrid() {
+        ctx.fillStyle = '#02060c';
+        ctx.fillRect(0, 0, sketchpad.width, sketchpad.height);
+        logTerminal("sys", "Workspace vector plane cleared.");
+    }
 
-            recognition.onresult = (event) => {
-                const currentResultIndex = event.resultIndex;
-                const transcript = event.results[currentResultIndex][0].transcript;
-                processInput(transcript);
-            };
+    function setDrawMode(mode) {
+        state.drawMode = mode;
+        document.getElementById('btnPenMode').className = mode === 'draw' ? 'active' : '';
+        document.getElementById('btnEraserMode').className = mode === 'erase' ? 'active' : '';
+    }
 
-            recognition.start();
-        }
+    function startDrawing(e) {
+        state.isDrawing = true;
+        ctx.beginPath();
+        const rect = sketchpad.getBoundingClientRect();
+        ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+    }
 
-        startBtn.addEventListener('click', () => {
-            const key = apiKeyInput.value.trim();
-            if(!key) {
-                alert("Please enter a Gemini API Key first.");
-                return;
-            }
-            localStorage.setItem('jarvis_api_key', key);
-            startBtn.style.display = 'none';
-            
-            jarvisSpeak("Cognitive architecture initialized. Link established, Sir.");
-            initSpeechRecognition();
-            initCamera();
-        });
+    function drawStroke(e) {
+        if (!state.isDrawing) return;
+        const rect = sketchpad.getBoundingClientRect();
+        ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+        
+        ctx.lineWidth = state.drawMode === 'erase' ? 24 : 2;
+        ctx.strokeStyle = state.drawMode === 'erase' ? '#02060c' : '#00e5ff';
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+    }
 
-        if (typeof speechSynthesis !== 'undefined' && speechSynthesis.onvoiceschanged !== undefined) {
-            speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
-        }
-    </script>
+    function stopDrawing() {
+        state.isDrawing = false;
+    }
+</script>
+
 </body>
 </html>
